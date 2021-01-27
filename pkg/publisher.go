@@ -1,4 +1,4 @@
-package kafkaexample
+package chatrooms
 
 import (
 	"context"

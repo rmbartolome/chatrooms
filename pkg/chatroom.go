@@ -1,4 +1,4 @@
-package kafkaexample
+package chatrooms
 
 type Message struct {
 	Username string `json:"username"`
