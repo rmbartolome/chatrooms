@@ -8,7 +8,7 @@ import (
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/snappy"
 
-	kafkaexample "github.com/rbartolome/kafka-go-chatrooms/pkg"
+	chatrooms "github.com/rbartolome/chatrooms/pkg"
 )
 
 type publisher struct {
@@ -16,7 +16,7 @@ type publisher struct {
 }
 
 // NewPublisher create a kafka publisher
-func NewPublisher(brokers []string, topic string) kafkaexample.Publisher {
+func NewPublisher(brokers []string, topic string) chatrooms.Publisher {
 	dialer := &kafka.Dialer{
 		Timeout:  10 * time.Second,
 		ClientID: clientID,
@@ -50,7 +50,7 @@ func (p *publisher) encodeMessage(payload interface{}) (kafka.Message, error) {
 		return kafka.Message{}, err
 	}
 
-	key := kafkaexample.Ulid()
+	key := chatrooms.Ulid()
 	return kafka.Message{
 		Key:   []byte(key),
 		Value: m,

@@ -17,8 +17,8 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 
-	chatrooms "github.com/rbartolome/kafka-go-chatrooms/pkg"
-	"github.com/rbartolome/kafka-go-chatrooms/pkg/kafka"
+	chatrooms "github.com/rbartolome/chatrooms/pkg"
+	"github.com/rbartolome/chatrooms/pkg/kafka"
 )
 
 var user string

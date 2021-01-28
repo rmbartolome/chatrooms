@@ -9,14 +9,14 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
-	kafkaexample "github.com/rbartolome/kafka-go-chatrooms/pkg"
+	chatrooms "github.com/rbartolome/chatrooms/pkg"
 )
 
 type consumer struct {
 	reader *kafka.Reader
 }
 
-func NewConsumer(brokers []string, topic string) kafkaexample.Consumer {
+func NewConsumer(brokers []string, topic string) chatrooms.Consumer {
 
 	c := kafka.ReaderConfig{
 		Brokers:         brokers,
@@ -25,14 +25,14 @@ func NewConsumer(brokers []string, topic string) kafkaexample.Consumer {
 		MaxBytes:        10e6,            // 10MB
 		MaxWait:         1 * time.Second, // Maximum amount of time to wait for new data to come when fetching batches of messages from kafka.
 		ReadLagInterval: -1,
-		GroupID:         kafkaexample.Ulid(),
+		GroupID:         chatrooms.Ulid(),
 		StartOffset:     kafka.LastOffset,
 	}
 
 	return &consumer{kafka.NewReader(c)}
 }
 
-func (c *consumer) Read(ctx context.Context, chMsg chan kafkaexample.Message, chErr chan error) {
+func (c *consumer) Read(ctx context.Context, chMsg chan chatrooms.Message, chErr chan error) {
 	defer c.reader.Close()
 
 	for {
@@ -43,7 +43,7 @@ func (c *consumer) Read(ctx context.Context, chMsg chan kafkaexample.Message, ch
 			continue
 		}
 
-		var message kafkaexample.Message
+		var message chatrooms.Message
 		err = json.Unmarshal(m.Value, &message)
 		if err != nil {
 			chErr <- err
