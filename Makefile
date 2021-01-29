@@ -1,5 +1,5 @@
 # Go parameters
-SERVER_MAIN_PATH=cmd/server/main.go
+SERVER_MAIN_PATH=cmd/server
 CLIENT_MAIN_PATH=cmd/client/main.go
 BINARY_SERVER_NAME=$(BINARY_PATH)/server
 BINARY_CLIENT_NAME=$(BINARY_PATH)/client
@@ -7,7 +7,7 @@ BINARY_CLIENT_NAME=$(BINARY_PATH)/client
 BINARY_PATH=bin
 
 server-run:
-	go build -o $(BINARY_SERVER_NAME) -race $(SERVER_MAIN_PATH)
+	go build -o $(BINARY_SERVER_NAME) -race ./$(SERVER_MAIN_PATH)
 	./$(BINARY_SERVER_NAME)
 
 client-run:

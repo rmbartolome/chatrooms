@@ -1,12 +1,17 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
+	"database/sql"
 	"fmt"
 	"net/http"
+
+	"context"
+	"encoding/json"
 	"os"
 	"strings"
+
+	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/joho/godotenv/autoload"
@@ -20,7 +25,29 @@ type Request struct {
 	Message  string `json:"message"`
 }
 
+func newRouter() *mux.Router {
+	r := mux.NewRouter()
+
+	r.HandleFunc("/messages", createMessageHandler).Methods("POST")
+	r.HandleFunc("/messages", getMessageHandler).Methods("GET")
+	r.HandleFunc("/messages", updateMessageHandler).Methods("PUT")
+	r.HandleFunc("/messages", deleteMessageHandler).Methods("DELETE")
+
+	return r
+}
+
 func main() {
+	connString := "dbname=chatroom sslmode=disable"
+	db, err := sql.Open("postgres", connString)
+	if err != nil {
+		panic(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		panic(err)
+	}
+
+	InitStore(&dbStore{db: db})
 
 	var (
 		brokers = os.Getenv("KAFKA_BROKERS")
@@ -30,8 +57,13 @@ func main() {
 	publisher := kafka.NewPublisher(strings.Split(brokers, ","), topic)
 
 	r := gin.Default()
-	r.POST("/join", joinHandler(publisher))
+	// nr := newRouter()
+
 	r.POST("/publish", publishHandler(publisher))
+	r.POST("/join", joinHandler(publisher))
+
+	// fmt.Println("Servidor corriendo por el puerto 8080")
+	// http.ListenAndServe(":8080", nr)
 
 	_ = r.Run()
 }
@@ -63,6 +95,12 @@ func publishHandler(publisher chatrooms.Publisher) func(*gin.Context) {
 		}
 
 		message := chatrooms.NewMessage(req.Username, req.Message)
+
+		msg := Message{Username: req.Username, Content: req.Message}
+		err = store.CreateMessage(&msg)
+		if err != nil {
+			fmt.Println(err)
+		}
 
 		if err := publisher.Publish(context.Background(), message); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err})
