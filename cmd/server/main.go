@@ -1,128 +1,79 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
-	"net/http"
-
-	"context"
-	"encoding/json"
 	"os"
-	"strings"
+	"time"
 
-	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
+	"github.com/go-kit/kit/log/level"
 
-	"github.com/gin-gonic/gin"
-	_ "github.com/joho/godotenv/autoload"
+	jaegercfg "github.com/uber/jaeger-client-go/config"
 
-	httptransport "github.com/go-kit/kit/transport/http"
-	chatrooms "github.com/rbartolome/chatrooms/pkg"
-	"github.com/rbartolome/chatrooms/pkg/kafka"
+	"github.com/opentracing/opentracing-go"
+	commons "gitlab.falabella.com/fif/integracion/forthehorde/commons/go-microservices-commons"
+
+	"github.com/rbartolome/chatrooms/cmd/config"
+	"github.com/rbartolome/chatrooms/internal/client"
+	"github.com/rbartolome/chatrooms/internal/endpoint"
+	"github.com/rbartolome/chatrooms/internal/handler"
+	"github.com/rbartolome/chatrooms/internal/service"
 )
 
-func NewHTTPServer(ctx context.Context, endpoints Endpoints) http.Handler {
-	r := mux.NewRouter()
-	r.Use(commonMiddleware)
-
-	r.Methods("POST").Path("/user").Handler(httptransport.NewServer(
-		endpoints.CreateUser,
-		decodeUserReq,
-		encodeResponse,
-	))
-
-	r.Methods("GET").Path("/user/{id}").Handler(httptransport.NewServer(
-		endpoints.GetUser,
-		decodeEmailReq,
-		encodeResponse,
-	))
-
-	return r
-
-}
-
-func commonMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "application/json")
-		next.ServeHTTP(w, r)
-	})
-}
-
-type Request struct {
-	Username string `json:"username"`
-	Message  string `json:"message"`
-}
-
 func main() {
-	connString := "dbname=chatroom sslmode=disable"
-	db, err := sql.Open("postgres", connString)
-	if err != nil {
-		panic(err)
-	}
-	err = db.Ping()
-	if err != nil {
-		panic(err)
+	cfg := config.ReadConfiguration()
+
+	port, _ := cfg["port"]
+	loggingLevel, _ := cfg["logging_level"]
+	tracingEnabled, _ := cfg["tracing_enabled"]
+	metricsEnabled, _ := cfg["metrics_enabled"]
+
+	url := cfg["url"].(string)
+	timeout := time.Duration(cfg["timeout"].(int)) * time.Second
+
+	logger := commons.ConfigureLogger(loggingLevel.(string))
+
+	var metricsConf *commons.MetricsConfig
+	if metricsEnabled.(bool) == true {
+		metricsConf = commons.MakeDefaultEndpointMetrics("restructuraciones", "integracion")
 	}
 
-	InitStore(&dbStore{db: db})
+	var tracer opentracing.Tracer
+	//Override de JAEGER_DISABLED en caso de tracing no habilitado
+	if tracingEnabled.(bool) == true {
+		// Instanciar tracer global Jaeger
+		traceCfg, err := jaegercfg.FromEnv()
+		if err != nil {
+			level.Error(logger).Log("No se pudo parsear configuracion de Jaeger", err.Error())
+			return
+		}
 
+		tracer, closer, err := traceCfg.NewTracer()
+		defer closer.Close()
+		if err != nil {
+			level.Error(logger).Log("No se pudo inicializar Tracer Jaeger", err.Error())
+			return
+		}
+
+		opentracing.SetGlobalTracer(tracer)
+	} else {
+		os.Setenv("JAEGER_DISABLED", "true")
+	}
+
+	//Implementación de un GET estatico
+	endpoint_api := client.NewHTTPClientEndpoint(url, timeout, logger)
+	endpoint_api = commons.EndpointLogMiddleware("message_service", "/messages", "GET", logger)(endpoint_api)
+
+	//Implementación de un GET dinámico
+	endpoint_character := client.MakeHTTPClientCharacterEndpoint(url, timeout, logger)
+	endpoint_character = commons.EndpointLogMiddleware("message_service", "/messages", "POST", logger)(endpoint_character)
+
+	//Llamado a GET estatico
 	var (
-		brokers = os.Getenv("KAFKA_BROKERS")
-		topic   = os.Getenv("KAFKA_TOPIC")
+		svc             = service.MakeService(endpoint_api)
+		serviceEndpoint = endpoint.MakeServiceEndpoint(svc)
+		httphandler     = handler.NewHTTPHandler(logger, serviceEndpoint, tracer, metricsConf)
 	)
 
-	publisher := kafka.NewPublisher(strings.Split(brokers, ","), topic)
+	g := commons.CreateServer(httphandler, port.(string), logger)
 
-	r := gin.Default()
-	// nr := newRouter()
-
-	r.POST("/publish", publishHandler(publisher))
-	r.POST("/join", joinHandler(publisher))
-
-	// fmt.Println("Servidor corriendo por el puerto 8080")
-	// http.ListenAndServe(":8080", nr)
-
-	_ = r.Run()
-}
-
-func joinHandler(publisher chatrooms.Publisher) func(*gin.Context) {
-	return func(c *gin.Context) {
-		var req Request
-		err := json.NewDecoder(c.Request.Body).Decode(&req)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err})
-		}
-
-		message := chatrooms.NewSystemMessage(fmt.Sprintf("%s has joined the room!", req.Username))
-
-		if err := publisher.Publish(context.Background(), message); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err})
-		}
-
-		c.JSON(http.StatusAccepted, gin.H{"message": "message published"})
-	}
-}
-
-func publishHandler(publisher chatrooms.Publisher) func(*gin.Context) {
-	return func(c *gin.Context) {
-		var req Request
-		err := json.NewDecoder(c.Request.Body).Decode(&req)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err})
-		}
-
-		message := chatrooms.NewMessage(req.Username, req.Message)
-
-		msg := Message{Username: req.Username, Content: req.Message}
-		err = store.CreateMessage(&msg)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		if err := publisher.Publish(context.Background(), message); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err})
-		}
-
-		c.JSON(http.StatusAccepted, gin.H{"message": "message published"})
-	}
+	logger.Log("exit", g.Run())
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	"github.com/rbartolome/chatrooms/internal/entity"
 
 	"github.com/go-kit/kit/endpoint"
@@ -12,7 +13,7 @@ type MessageService interface {
 	GetMessage(context.Context, *entity.Request) (interface{}, error)
 }
 
-func MakeService(endp endpoint.Endpoint) MessageService {
+func MakeMessageService(endp endpoint.Endpoint) MessageService {
 	return &service{
 		client: endp,
 	}
