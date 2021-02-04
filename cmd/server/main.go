@@ -16,24 +16,41 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/joho/godotenv/autoload"
 
+	httptransport "github.com/go-kit/kit/transport/http"
 	chatrooms "github.com/rbartolome/chatrooms/pkg"
 	"github.com/rbartolome/chatrooms/pkg/kafka"
 )
 
+func NewHTTPServer(ctx context.Context, endpoints Endpoints) http.Handler {
+	r := mux.NewRouter()
+	r.Use(commonMiddleware)
+
+	r.Methods("POST").Path("/user").Handler(httptransport.NewServer(
+		endpoints.CreateUser,
+		decodeUserReq,
+		encodeResponse,
+	))
+
+	r.Methods("GET").Path("/user/{id}").Handler(httptransport.NewServer(
+		endpoints.GetUser,
+		decodeEmailReq,
+		encodeResponse,
+	))
+
+	return r
+
+}
+
+func commonMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
+}
+
 type Request struct {
 	Username string `json:"username"`
 	Message  string `json:"message"`
-}
-
-func newRouter() *mux.Router {
-	r := mux.NewRouter()
-
-	r.HandleFunc("/messages", createMessageHandler).Methods("POST")
-	r.HandleFunc("/messages", getMessageHandler).Methods("GET")
-	r.HandleFunc("/messages", updateMessageHandler).Methods("PUT")
-	r.HandleFunc("/messages", deleteMessageHandler).Methods("DELETE")
-
-	return r
 }
 
 func main() {

@@ -83,7 +83,8 @@ func (s *StoreSuite) TestGetMessage() {
 	}
 
 	d, _ := time.Parse("2006-02-01", "2020-05-05")
-	expectedMessage := Message{Username: "test", Content: "test content", Date: d}
+	expectedMessage := Message{Username: "test", Content: "test content", Date: d, Id: messages[0].Id}
+	messages[0].Date = d
 
 	if *messages[0] != expectedMessage {
 		s.T().Errorf("incorrect details, expected %v, got %v", expectedMessage, *messages[0])

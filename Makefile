@@ -1,20 +1,23 @@
-# Go parameters
-SERVER_MAIN_PATH=cmd/server
-CLIENT_MAIN_PATH=cmd/client/main.go
-BINARY_SERVER_NAME=$(BINARY_PATH)/server
-BINARY_CLIENT_NAME=$(BINARY_PATH)/client
+BUILDPATH=$(CURDIR)
+API_NAME=chatrooms-master-mold
 
-BINARY_PATH=bin
+build: 
+	@echo "Creando Binario ..."
+	@go build -mod=vendor -ldflags '-s -w' -o $(BUILDPATH)/build/bin/${API_NAME} cmd/server/main.go
+	@echo "Binario generado en build/bin/${API_NAME}"
 
-server-run:
-	go build -o $(BINARY_SERVER_NAME) -race ./$(SERVER_MAIN_PATH)
-	./$(BINARY_SERVER_NAME)
+test: 
+	@echo "Ejecutando tests..."
+	@go test ./... --coverprofile coverfile_out >> /dev/null
+	@go tool cover -func coverfile_out
 
-client-run:
-	go build -o $(BINARY_CLIENT_NAME) -race $(CLIENT_MAIN_PATH)
-	./$(BINARY_CLIENT_NAME)
+coverage: 
+	@echo "Coverfile..."
+	@go test ./... --coverprofile coverfile_out >> /dev/null
+	@go tool cover -func coverfile_out
+	@go tool cover -html=coverfile_out -o coverfile_out.html
 
-clean:
-	go clean $(CLIENT_MAIN_PATH)
-	go clean $(SERVER_MAIN_PATH)
-	rm -f $(BINARY_PATH)/*
+docker:
+	@docker build . -t customer-debt-assesment:latest -f iaas/Dockerfile
+
+.PHONY: test build
