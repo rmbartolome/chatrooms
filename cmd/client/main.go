@@ -36,7 +36,7 @@ func main() {
 		topic   = os.Getenv("KAFKA_TOPIC")
 	)
 
-	fmt.Println("Choose your nickname:")
+	fmt.Println("Elije tu alias:")
 	_, _ = fmt.Scanf("%s\n", &user)
 	if err := joinTheRoom(host); err != nil {
 		log.Fatal(err)
@@ -86,7 +86,7 @@ func printMessage(m chatrooms.Message) {
 	case m.Username == chatrooms.SystemID:
 		fmt.Println(m.Message)
 	default:
-		fmt.Printf("%s say: %s", m.Username, m.Message)
+		fmt.Printf("%s dijo: %s", m.Username, m.Message)
 	}
 }
 
